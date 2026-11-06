@@ -1,4 +1,4 @@
-name: Deploy SiswaBantu to GitHub Pages
+name: Deploy SiswaBantu Mobile App
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -17,37 +17,54 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          distribution: 'zulu'
+          java-version: '17'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
 
-      - name: Build
-        run: npm run build
+      - name: Install Flutter Dependencies
+        working-directory: siswabantu_mobile
+        run: flutter pub get
 
-      - name: Upload artifact
+      - name: Build Flutter Mobile Web (PWA / Live App)
+        working-directory: siswabantu_mobile
+        run: flutter build web --release --base-href "/siswabantu/"
+
+      - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: './siswabantu_mobile/build/web'
 
-  deploy:
+      - name: Build Android APK
+        working-directory: siswabantu_mobile
+        run: flutter build apk --release
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiswaBantu-Mobile-v2.0-Release-APK
+          path: siswabantu_mobile/build/app/outputs/flutter-apk/app-release.apk
+
+  deploy-pages:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-and-deploy
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy Flutter Mobile to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
